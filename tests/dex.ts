@@ -230,7 +230,7 @@ describe("dex", async () => {
 
     [userPDA, bump_user] = await PublicKey.findProgramAddress(
           [
-            anchor.utils.bytes.utf8.encode("user-account"),
+            anchor.utils.bytes.utf8.encode("order-account"),
             randomPubkey.publicKey.toBuffer(),
             provider.wallet.publicKey.toBuffer()
       
@@ -248,6 +248,44 @@ describe("dex", async () => {
         );
 
       const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653552655)).accounts({
+      user: provider.wallet.publicKey,
+      userAccount: userPDA,
+      token1Mint : mint.publicKey,
+      token2Mint : mint2.publicKey,
+      userVault : vaultPDA,
+      orderVault : orderVaultPDA,
+      systemProgram: anchor.web3.SystemProgram.programId,
+      tokenProgram: spl.TOKEN_PROGRAM_ID
+    }).rpc();
+
+
+    console.log("vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(vaultPDA));
+    console.log("order vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(orderVaultPDA));
+
+  });
+  
+  it("Cancel Order", async()=>{
+
+    [userPDA, bump_user] = await PublicKey.findProgramAddress(
+          [
+            anchor.utils.bytes.utf8.encode("order-account"),
+            randomPubkey.publicKey.toBuffer(),
+            provider.wallet.publicKey.toBuffer()
+      
+          ],
+          program.programId
+        );
+    [orderVaultPDA, bump_ovault] = await PublicKey.findProgramAddress(
+          [
+            anchor.utils.bytes.utf8.encode("order-vault"),
+            randomPubkey.publicKey.toBuffer(),
+            provider.wallet.publicKey.toBuffer()
+      
+          ],
+          program.programId
+        );
+
+      const tx = await program.methods.cancelOrder(bump_vault,bump_ovault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653552655)).accounts({
       user: provider.wallet.publicKey,
       userAccount: userPDA,
       token1Mint : mint.publicKey,

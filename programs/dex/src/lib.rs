@@ -81,13 +81,38 @@ pub mod dex {
         Ok(())
         
     }
+    
+    pub fn cancel_order(ctx: Context<CancelOrderAccount>,_vault_bump: u8, _order_bump: u8, _random : Pubkey, _token1_amt : u64, _token2_amt: u64, _expiry_date : u64) -> Result<()>{
+        
+        let user_info = &mut ctx.accounts.user_account;
+        require!(user_info.orderstatus==1,CustomError::CannotCancel);
+        user_info.orderstatus = 0;
+
+        let transfer_instruction = anchor_spl::token::Transfer {
+            from: ctx.accounts.order_vault.to_account_info(),
+            to: ctx.accounts.user_vault.to_account_info(),
+            authority: ctx.accounts.order_vault.to_account_info(),
+        };
+        let bump_vector = _order_bump.to_le_bytes();
+        let inner = vec![b"order-vault".as_ref(), _random.as_ref(),ctx.accounts.user.key.as_ref(), bump_vector.as_ref()];
+        let outer = vec![inner.as_slice()];
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction,
+            outer.as_slice(),
+        );
+        anchor_spl::token::transfer(cpi_ctx, user_info.token1amt)?;
+
+
+        Ok(())
+        
+    }
 
 }
 
 #[error_code]
 pub enum CustomError {
-    NeedToBeInitialized,
-    NeedToBeFunded,
+    CannotCancel,
     CannotBeInFuture
 }
 
@@ -142,9 +167,9 @@ pub struct CreateOrderAccount<'info> {
     #[account(
         init,
         payer = user,
-        space = 8 + 8 + 4 + 200 + 1 + 8, seeds = [b"user-account".as_ref(),random.as_ref(),user.key().as_ref()], bump
+        space = 8 + 8 + 4 + 200 + 1 + 8, seeds = [b"order-account".as_ref(),random.as_ref(),user.key().as_ref()], bump
     )]
-    pub user_account: Account<'info, UserAccount>,
+    pub user_account: Account<'info, OrderAccount>,
     pub token1_mint: Account<'info, Mint>,
     pub token2_mint: Account<'info, Mint>,
     #[account(
@@ -170,16 +195,16 @@ pub struct CreateOrderAccount<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(vault_bump: u8,random : Pubkey)]
+#[instruction(vault_bump: u8,order_bump: u8,random : Pubkey)]
 pub struct CancelOrderAccount<'info> {
     
     #[account(mut)]
     pub user: Signer<'info>,
     #[account(
         mut,
-        seeds = [b"user-account".as_ref(),random.as_ref(),user.key().as_ref()], bump
+        seeds = [b"order-account".as_ref(),random.as_ref(),user.key().as_ref()], bump=user_account.bump
     )]
-    pub user_account: Account<'info, UserAccount>,
+    pub user_account: Account<'info, OrderAccount>,
     pub token1_mint: Account<'info, Mint>,
     pub token2_mint: Account<'info, Mint>,
     #[account(
@@ -189,12 +214,9 @@ pub struct CancelOrderAccount<'info> {
     )]
     pub user_vault: Account<'info, TokenAccount>,
     #[account(
-        init,
-        payer = user,
+        mut,
         seeds = [b"order-vault".as_ref(),random.as_ref(),user.key().as_ref()],
-        bump,
-        token::mint = token1_mint,
-        token::authority = order_vault,
+        bump = order_bump
     )]
     pub order_vault: Account<'info, TokenAccount>,
     pub system_program: Program<'info, System>,
@@ -203,9 +225,11 @@ pub struct CancelOrderAccount<'info> {
     
 }
 
+
+
 #[account]
 #[derive(Default)]
-pub struct UserAccount {
+pub struct OrderAccount {
     orderid: Pubkey,
     user : Pubkey,
     token1mint : Pubkey,
