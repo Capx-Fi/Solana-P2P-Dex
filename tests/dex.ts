@@ -39,6 +39,10 @@ describe("dex", async () => {
   let bump_vault;
   let orderVaultPDA;
   let bump_ovault;
+  let vault21PDA;
+  let bump_21vault;
+  let vault12PDA;
+  let bump_12vault;
 
   
 
@@ -247,7 +251,7 @@ describe("dex", async () => {
           program.programId
         );
 
-      const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653552655)).accounts({
+      const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653755706)).accounts({
       user: provider.wallet.publicKey,
       userAccount: userPDA,
       token1Mint : mint.publicKey,
@@ -285,11 +289,10 @@ describe("dex", async () => {
           program.programId
         );
 
-      const tx = await program.methods.cancelOrder(bump_vault,bump_ovault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653552655)).accounts({
+      const tx = await program.methods.cancelOrder(bump_vault,bump_ovault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653755706)).accounts({
       user: provider.wallet.publicKey,
       userAccount: userPDA,
       token1Mint : mint.publicKey,
-      token2Mint : mint2.publicKey,
       userVault : vaultPDA,
       orderVault : orderVaultPDA,
       systemProgram: anchor.web3.SystemProgram.programId,
@@ -301,6 +304,149 @@ describe("dex", async () => {
     console.log("order vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(orderVaultPDA));
 
   });
+
+  it("Generating another random Pubkey and Creating Order",async()=>{
+    randomPubkey = anchor.web3.Keypair.generate();
+
+    [userPDA, bump_user] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("order-account"),
+        randomPubkey.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+  
+      ],
+      program.programId
+    );
+[orderVaultPDA, bump_ovault] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("order-vault"),
+        randomPubkey.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+  
+      ],
+      program.programId
+    );
+
+  const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653755706)).accounts({
+  user: provider.wallet.publicKey,
+  userAccount: userPDA,
+  token1Mint : mint.publicKey,
+  token2Mint : mint2.publicKey,
+  userVault : vaultPDA,
+  orderVault : orderVaultPDA,
+  systemProgram: anchor.web3.SystemProgram.programId,
+  tokenProgram: spl.TOKEN_PROGRAM_ID
+}).rpc();
+
+
+console.log("vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(vaultPDA));
+console.log("order vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(orderVaultPDA));
+
+  });
+
+  it("Tokens of type2 in vault",async()=>{
+
+    [vaultPDA, bump_vault] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("user-vault"),
+        mint2.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+  
+      ],
+      program.programId
+    );
+
+const tx = await program.methods.depositToken(new anchor.BN(8000)).accounts({
+      user: provider.wallet.publicKey,
+      tokenMint : mint2.publicKey,
+      userVault : vaultPDA,
+      tokenUserAta : sender_token2,
+      systemProgram: anchor.web3.SystemProgram.programId,
+      tokenProgram: spl.TOKEN_PROGRAM_ID
+    }).rpc();
+
+    console.log("token1 balance in ATA: ", await program.provider.connection.getTokenAccountBalance(sender_token1));
+    console.log("token1 balance in ATA: ", await program.provider.connection.getTokenAccountBalance(sender_token2));
+    console.log("vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(vaultPDA));
+
+  })
+
+  it("Accept order",async()=>{
+
+    [userPDA, bump_user] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("order-account"),
+        randomPubkey.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+  
+      ],
+      program.programId
+    );
+
+    [vaultPDA, bump_vault] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("user-vault"),
+        mint2.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+  
+      ],
+      program.programId
+    );
+
+    [orderVaultPDA, bump_ovault] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("order-vault"),
+        randomPubkey.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+  
+      ],
+      program.programId
+    );
+
+    [vault21PDA, bump_21vault] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("user-vault"),
+        mint.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+      ],
+      program.programId
+    );
+    
+    [vault12PDA, bump_12vault] = await PublicKey.findProgramAddress(
+      [
+        anchor.utils.bytes.utf8.encode("user-vault"),
+        mint2.publicKey.toBuffer(),
+        provider.wallet.publicKey.toBuffer()
+      ],
+      program.programId
+    );
+
+    await console.log(userPDA)
+    await console.log(vaultPDA)
+    await console.log(orderVaultPDA)
+    await console.log(vault21PDA)
+    await console.log(vault12PDA)
+    
+    console.log("BEFORE : vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(vault21PDA));
+    console.log("BEFORE : vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(vault12PDA));
+    
+    const tx = await program.methods.acceptOrder(randomPubkey.publicKey,provider.wallet.publicKey,bump_vault,bump_ovault).accounts({
+      user: provider.wallet.publicKey,
+      userAccount: userPDA,
+      token1Mint : mint.publicKey,
+      token2Mint : mint2.publicKey,
+      userVault22 : vaultPDA,
+      orderVault : orderVaultPDA,
+      userVault21 : vault21PDA,
+      userVault12 : vault12PDA,
+      systemProgram: anchor.web3.SystemProgram.programId,
+      tokenProgram: spl.TOKEN_PROGRAM_ID
+    }).rpc();
+
+    console.log("vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(vault21PDA));
+    console.log("vault balance in ATA: ", await program.provider.connection.getTokenAccountBalance(vault12PDA));
+
+  })
   
 
 });

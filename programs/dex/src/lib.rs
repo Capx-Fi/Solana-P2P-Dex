@@ -86,6 +86,7 @@ pub mod dex {
         
         let user_info = &mut ctx.accounts.user_account;
         require!(user_info.orderstatus==1,CustomError::CannotCancel);
+        require!(ctx.accounts.token1_mint.to_account_info().key() == user_info.token1mint,CustomError::WrongMintGiven);
         user_info.orderstatus = 0;
 
         let transfer_instruction = anchor_spl::token::Transfer {
@@ -108,12 +109,59 @@ pub mod dex {
         
     }
 
+    pub fn accept_order(ctx: Context<AcceptOrderAccount>, _random : Pubkey, _intitiator: Pubkey, _vault_bump: u8, _order_bump: u8) -> Result<()>{
+        
+        let user_info = &mut ctx.accounts.user_account;
+        require!(user_info.orderstatus==1,CustomError::Invalid);
+        user_info.orderstatus = 2;
+
+
+        let transfer_instruction = anchor_spl::token::Transfer {
+            from: ctx.accounts.order_vault.to_account_info(),
+            to: ctx.accounts.user_vault21.to_account_info(),
+            authority: ctx.accounts.order_vault.to_account_info(),
+        };
+        let bump_vector = _order_bump.to_le_bytes();
+        let inner = vec![b"order-vault".as_ref(), _random.as_ref(),_intitiator.as_ref(), bump_vector.as_ref()];
+        let outer = vec![inner.as_slice()];
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction,
+            outer.as_slice(),
+        );
+        anchor_spl::token::transfer(cpi_ctx, user_info.token1amt)?;
+
+
+        let transfer_instruction2 = anchor_spl::token::Transfer {
+            from: ctx.accounts.user_vault22.to_account_info(),
+            to: ctx.accounts.user_vault12.to_account_info(),
+            authority: ctx.accounts.user_vault22.to_account_info(),
+        };
+        let bump_vector2 = _vault_bump.to_le_bytes();
+        let inner2 = vec![b"user-vault".as_ref(), ctx.accounts.token2_mint.to_account_info().key.as_ref(),ctx.accounts.user.key.as_ref(), bump_vector2.as_ref()];
+        let outer2 = vec![inner2.as_slice()];
+        let cpi_ctx2 = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction2,
+            outer2.as_slice(),
+        );
+        anchor_spl::token::transfer(cpi_ctx2, user_info.token2amt)?;
+
+
+
+
+        
+        Ok(())
+    }
+
 }
 
 #[error_code]
 pub enum CustomError {
     CannotCancel,
-    CannotBeInFuture
+    CannotBeInFuture,
+    Invalid,
+    WrongMintGiven
 }
 
 #[derive(Accounts)]
@@ -129,7 +177,7 @@ pub struct Deposit<'info> {
         token::mint = token_mint,
         token::authority = user_vault,
     )]
-    pub user_vault: Account<'info, TokenAccount>,
+    pub user_vault: Box<Account<'info, TokenAccount>>,
     #[account(mut, constraint = token_user_ata.mint ==  token_mint.key(), constraint = token_user_ata.owner == user.key())]
     pub token_user_ata: Account<'info, TokenAccount>,
     pub system_program: Program<'info, System>,
@@ -150,7 +198,7 @@ pub struct Withdraw<'info> {
         token::mint = token_mint,
         token::authority = user_vault,
     )]
-    pub user_vault: Account<'info, TokenAccount>,
+    pub user_vault: Box<Account<'info, TokenAccount>>,
     #[account(mut, constraint = token_user_ata.mint ==  token_mint.key(), constraint = token_user_ata.owner == user.key())]
     pub token_user_ata: Account<'info, TokenAccount>,
     pub system_program: Program<'info, System>,
@@ -169,7 +217,7 @@ pub struct CreateOrderAccount<'info> {
         payer = user,
         space = 8 + 8 + 4 + 200 + 1 + 8, seeds = [b"order-account".as_ref(),random.as_ref(),user.key().as_ref()], bump
     )]
-    pub user_account: Account<'info, OrderAccount>,
+    pub user_account: Box<Account<'info, OrderAccount>>,
     pub token1_mint: Account<'info, Mint>,
     pub token2_mint: Account<'info, Mint>,
     #[account(
@@ -177,7 +225,7 @@ pub struct CreateOrderAccount<'info> {
         seeds = [b"user-vault".as_ref(),token1_mint.key().as_ref(),user.key().as_ref()],
         bump = vault_bump
     )]
-    pub user_vault: Account<'info, TokenAccount>,
+    pub user_vault: Box<Account<'info, TokenAccount>>,
     #[account(
         init,
         payer = user,
@@ -186,7 +234,7 @@ pub struct CreateOrderAccount<'info> {
         token::mint = token1_mint,
         token::authority = order_vault,
     )]
-    pub order_vault: Account<'info, TokenAccount>,
+    pub order_vault: Box<Account<'info, TokenAccount>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>
@@ -204,21 +252,72 @@ pub struct CancelOrderAccount<'info> {
         mut,
         seeds = [b"order-account".as_ref(),random.as_ref(),user.key().as_ref()], bump=user_account.bump
     )]
-    pub user_account: Account<'info, OrderAccount>,
+    pub user_account: Box<Account<'info, OrderAccount>>,
     pub token1_mint: Account<'info, Mint>,
-    pub token2_mint: Account<'info, Mint>,
     #[account(
         mut,
         seeds = [b"user-vault".as_ref(),token1_mint.key().as_ref(),user.key().as_ref()],
         bump = vault_bump
     )]
-    pub user_vault: Account<'info, TokenAccount>,
+    pub user_vault: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [b"order-vault".as_ref(),random.as_ref(),user.key().as_ref()],
         bump = order_bump
     )]
-    pub order_vault: Account<'info, TokenAccount>,
+    pub order_vault: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub rent: Sysvar<'info, Rent>
+    
+}
+
+#[derive(Accounts)]
+#[instruction(random : Pubkey,initiator : Pubkey,vault_bump: u8,order_bump: u8)]
+pub struct AcceptOrderAccount<'info> {
+    
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"order-account".as_ref(),random.as_ref(),initiator.as_ref()], bump=user_account.bump
+    )]
+    pub user_account: Box<Account<'info, OrderAccount>>,
+    pub token1_mint: Account<'info, Mint>,
+    pub token2_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        seeds = [b"user-vault".as_ref(),token2_mint.key().as_ref(),user.key().as_ref()],
+        bump = vault_bump
+    )]
+    pub user_vault22: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"order-vault".as_ref(),random.as_ref(),initiator.as_ref()],
+        bump = order_bump
+    )]
+    pub order_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        init_if_needed,
+        payer = user,
+        seeds = [b"user-vault".as_ref(),token1_mint.key().as_ref(),user.key().as_ref()],
+        bump,
+        token::mint = token1_mint,
+        token::authority = user_vault21,
+    )]
+    pub user_vault21: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        init_if_needed,
+        payer = user,
+        seeds = [b"user-vault".as_ref(),token2_mint.key().as_ref(),initiator.as_ref()],
+        bump,
+        token::mint = token2_mint,
+        token::authority = user_vault12,
+    )]
+    pub user_vault12: Box<Account<'info, TokenAccount>>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>
