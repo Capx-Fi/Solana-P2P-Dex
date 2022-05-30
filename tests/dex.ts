@@ -251,7 +251,7 @@ describe("dex", async () => {
           program.programId
         );
 
-      const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653755706)).accounts({
+      const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1685521417)).accounts({
       user: provider.wallet.publicKey,
       userAccount: userPDA,
       token1Mint : mint.publicKey,
@@ -289,7 +289,7 @@ describe("dex", async () => {
           program.programId
         );
 
-      const tx = await program.methods.cancelOrder(bump_vault,bump_ovault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653755706)).accounts({
+      const tx = await program.methods.cancelOrder(bump_vault,bump_ovault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1685521417)).accounts({
       user: provider.wallet.publicKey,
       userAccount: userPDA,
       token1Mint : mint.publicKey,
@@ -327,7 +327,7 @@ describe("dex", async () => {
       program.programId
     );
 
-  const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1653755706)).accounts({
+  const tx = await program.methods.initOrder(bump_vault,randomPubkey.publicKey,new anchor.BN(100),new anchor.BN(50),new anchor.BN(1685521417)).accounts({
   user: provider.wallet.publicKey,
   userAccount: userPDA,
   token1Mint : mint.publicKey,
